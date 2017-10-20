@@ -8,11 +8,18 @@
 #include "SH1106.h"
 #include "SH1106Ui.h"
 
+#define OLED_RESET  D1   // RESET
+#define OLED_DC     D2   // Data/Command
+#define OLED_CS     D8   // Chip select
+
 #define DHTPIN 2
 #define DHTTYPE DHT22
 
 DHT dht(DHTPIN, DHTTYPE);
 HTTPClient http;
+
+SH1106 display(true, OLED_RESET, OLED_DC, OLED_CS); // FOR SPI
+SH1106Ui ui     ( &display );
 
 // Global Variables
 // =====================================================================
@@ -26,6 +33,36 @@ String apiToken = "e6b884fdef63344db8bd5f4a";
 String hum = "";
 String temp = "";
 String airP = "";
+
+bool drawFrame1(SH1106 *display, SH1106UiState* state, int x, int y) {
+  display->setTextAlignment(TEXT_ALIGN_LEFT);
+
+  display->setFont(ArialMT_Plain_24);
+  display->drawString(0 + x, 34 + y, temp);
+
+  return false;
+}
+
+bool drawFrame2(SH1106 *display, SH1106UiState* state, int x, int y) {
+  display->setTextAlignment(TEXT_ALIGN_LEFT);
+
+  display->setFont(ArialMT_Plain_24);
+  display->drawString(0 + x, 34 + y, hum);
+
+  return false;
+}
+
+bool drawFrame3(SH1106 *display, SH1106UiState* state, int x, int y) {
+  display->setTextAlignment(TEXT_ALIGN_LEFT);
+
+  display->setFont(ArialMT_Plain_24);
+  display->drawString(0 + x, 34 + y, airP);
+
+  return false;
+}
+
+int frameCount = 3;
+bool (*frames[])(SH1106 *display, SH1106UiState* state, int x, int y) = { drawFrame1,drawFrame2,drawFrame3 };
 
 // Wifi Config
 // =====================================================================
@@ -45,6 +82,13 @@ void setup() {
   Serial.begin(115200);   // Start monitor for debugging
   dht.begin();            // Start dht sensor
   connectToWifiNetwork(); // Function to make connection with Wifi
+
+  ui.setTargetFPS(60);
+    ui.setFrameAnimation(SLIDE_LEFT);
+  ui.setFrames(frames, frameCount);
+  ui.init();
+
+  display.flipScreenVertically();
 }
 
 // LOOP
@@ -70,6 +114,9 @@ void loop() {
       hum = getValue(request , ';' , 2);        // Set hum to incoming data
       airP = getValue(request , ';' , 3);       // Set AirPressure to incoming data
 
+
+      ui.update();      // Update UI of the oled screen
+
       client.flush();
       //client.println("Hi client! No, I am listening.\r"); // sends the answer to the client
     }
@@ -80,7 +127,7 @@ void loop() {
   // Send Data to Server
   // =====================================================================
 
-  StaticJsonBuffer<300> jsonBuffer;
+  StaticJsonBuffer<400> jsonBuffer;
   JsonObject& jsonRoot = jsonBuffer.createObject();
 
   jsonRoot["token"] = apiToken;
